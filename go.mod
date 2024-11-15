@@ -1,4 +1,4 @@
-module github.com/ra1phdd/wails-sys-tray
+module github.com/ra1phdd/wails-systray
 
 go 1.13
 
