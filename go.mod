@@ -1,4 +1,4 @@
-module github.com/getlantern/systray
+module github.com/ra1phdd/wails-sys-tray
 
 go 1.13
 
