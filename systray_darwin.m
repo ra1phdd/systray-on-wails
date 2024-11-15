@@ -29,14 +29,15 @@ withParentMenuId: (int)theParentMenuId
      withTooltip: (const char*)theTooltip
     withDisabled: (short)theDisabled
      withChecked: (short)theChecked;
-     @end
-     @implementation MenuItem
-     -(id) initWithId: (int)theMenuId
-     withParentMenuId: (int)theParentMenuId
-            withTitle: (const char*)theTitle
-          withTooltip: (const char*)theTooltip
-         withDisabled: (short)theDisabled
-          withChecked: (short)theChecked
+@end
+
+@implementation MenuItem
+-(id) initWithId: (int)theMenuId
+ withParentMenuId: (int)theParentMenuId
+        withTitle: (const char*)theTitle
+      withTooltip: (const char*)theTooltip
+     withDisabled: (short)theDisabled
+      withChecked: (short)theChecked
 {
   menuId = [NSNumber numberWithInt:theMenuId];
   parentMenuId = [NSNumber numberWithInt:theParentMenuId];
@@ -54,9 +55,9 @@ withParentMenuId: (int)theParentMenuId
   - (void) add_or_update_menu_item:(MenuItem*) item;
   - (IBAction)menuHandler:(id)sender;
   @property (assign) IBOutlet NSWindow *window;
-  @end
+@end
 
-  @implementation SysTrayAppDelegate
+@implementation SysTrayAppDelegate
 {
   NSStatusItem *statusItem;
   NSMenu *menu;
@@ -67,102 +68,115 @@ withParentMenuId: (int)theParentMenuId
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
-  self->statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-  self->menu = [[NSMenu alloc] init];
-  [self->menu setAutoenablesItems: FALSE];
-  [self->statusItem setMenu:self->menu];
-  // Once the user has removed it, the item needs to be explicitly brought back,
-  // even restarting the application is insufficient.
-  // Since the interface from Go is relatively simple, for now we ensure it's always
-  // visible at application startup.
-  self->statusItem.visible = TRUE;
-  systray_ready();
+  dispatch_async(dispatch_get_main_queue(), ^{
+    self->statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    self->menu = [[NSMenu alloc] init];
+    [self->menu setAutoenablesItems: FALSE];
+    [self->statusItem setMenu:self->menu];
+    self->statusItem.visible = TRUE;
+    systray_ready();
+  });
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification
 {
-  systray_on_exit();
+  dispatch_async(dispatch_get_main_queue(), ^{
+    systray_on_exit();
+  });
 }
 
 - (void)setRemovalAllowed:(BOOL)allowed {
-  NSStatusItemBehavior behavior = [self->statusItem behavior];
-  if (allowed) {
-    behavior |= NSStatusItemBehaviorRemovalAllowed;
-  } else {
-    behavior &= ~NSStatusItemBehaviorRemovalAllowed;
-  }
-  self->statusItem.behavior = behavior;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSStatusItemBehavior behavior = [self->statusItem behavior];
+    if (allowed) {
+      behavior |= NSStatusItemBehaviorRemovalAllowed;
+    } else {
+      behavior &= ~NSStatusItemBehaviorRemovalAllowed;
+    }
+    self->statusItem.behavior = behavior;
+  });
 }
 
 - (void)setIcon:(NSImage *)image {
-  statusItem.button.image = image;
-  [self updateTitleButtonStyle];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    statusItem.button.image = image;
+    [self updateTitleButtonStyle];
+  });
 }
 
 - (void)setTitle:(NSString *)title {
-  statusItem.button.title = title;
-  [self updateTitleButtonStyle];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    statusItem.button.title = title;
+    [self updateTitleButtonStyle];
+  });
 }
 
 -(void)updateTitleButtonStyle {
-  if (statusItem.button.image != nil) {
-    if ([statusItem.button.title length] == 0) {
-      statusItem.button.imagePosition = NSImageOnly;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (statusItem.button.image != nil) {
+      if ([statusItem.button.title length] == 0) {
+        statusItem.button.imagePosition = NSImageOnly;
+      } else {
+        statusItem.button.imagePosition = NSImageLeft;
+      }
     } else {
-      statusItem.button.imagePosition = NSImageLeft;
+      statusItem.button.imagePosition = NSNoImage;
     }
-  } else {
-    statusItem.button.imagePosition = NSNoImage;
-  }
+  });
 }
 
-
 - (void)setTooltip:(NSString *)tooltip {
-  statusItem.button.toolTip = tooltip;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    statusItem.button.toolTip = tooltip;
+  });
 }
 
 - (IBAction)menuHandler:(id)sender
 {
-  NSNumber* menuId = [sender representedObject];
-  systray_menu_item_selected(menuId.intValue);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSNumber* menuId = [sender representedObject];
+    systray_menu_item_selected(menuId.intValue);
+  });
 }
 
 - (void)add_or_update_menu_item:(MenuItem *)item {
-  NSMenu *theMenu = self->menu;
-  NSMenuItem *parentItem;
-  if ([item->parentMenuId integerValue] > 0) {
-    parentItem = find_menu_item(menu, item->parentMenuId);
-    if (parentItem.hasSubmenu) {
-      theMenu = parentItem.submenu;
-    } else {
-      theMenu = [[NSMenu alloc] init];
-      [theMenu setAutoenablesItems:NO];
-      [parentItem setSubmenu:theMenu];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSMenu *theMenu = self->menu;
+    NSMenuItem *parentItem;
+    if ([item->parentMenuId integerValue] > 0) {
+      parentItem = find_menu_item(menu, item->parentMenuId);
+      if (parentItem.hasSubmenu) {
+        theMenu = parentItem.submenu;
+      } else {
+        theMenu = [[NSMenu alloc] init];
+        [theMenu setAutoenablesItems:NO];
+        [parentItem setSubmenu:theMenu];
+      }
     }
-  }
 
-  NSMenuItem *menuItem;
-  menuItem = find_menu_item(theMenu, item->menuId);
-  if (menuItem == NULL) {
-    menuItem = [theMenu addItemWithTitle:item->title
-                               action:@selector(menuHandler:)
-                        keyEquivalent:@""];
-    [menuItem setRepresentedObject:item->menuId];
-  }
-  [menuItem setTitle:item->title];
-  [menuItem setTag:[item->menuId integerValue]];
-  [menuItem setTarget:self];
-  [menuItem setToolTip:item->tooltip];
-  if (item->disabled == 1) {
-    menuItem.enabled = FALSE;
-  } else {
-    menuItem.enabled = TRUE;
-  }
-  if (item->checked == 1) {
-    menuItem.state = NSControlStateValueOn;
-  } else {
-    menuItem.state = NSControlStateValueOff;
-  }
+    NSMenuItem *menuItem;
+    menuItem = find_menu_item(theMenu, item->menuId);
+    if (menuItem == NULL) {
+      menuItem = [theMenu addItemWithTitle:item->title
+                                 action:@selector(menuHandler:)
+                          keyEquivalent:@""];
+      [menuItem setRepresentedObject:item->menuId];
+    }
+    [menuItem setTitle:item->title];
+    [menuItem setTag:[item->menuId integerValue]];
+    [menuItem setTarget:self];
+    [menuItem setToolTip:item->tooltip];
+    if (item->disabled == 1) {
+      menuItem.enabled = FALSE;
+    } else {
+      menuItem.enabled = TRUE;
+    }
+    if (item->checked == 1) {
+      menuItem.state = NSControlStateValueOn;
+    } else {
+      menuItem.state = NSControlStateValueOff;
+    }
+  });
 }
 
 NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
@@ -183,159 +197,170 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
   }
 
   return NULL;
-};
+}
 
 - (void) add_separator:(NSNumber*) menuId
 {
-  [menu addItem: [NSMenuItem separatorItem]];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [menu addItem: [NSMenuItem separatorItem]];
+  });
 }
 
 - (void) hide_menu_item:(NSNumber*) menuId
 {
-  NSMenuItem* menuItem = find_menu_item(menu, menuId);
-  if (menuItem != NULL) {
-    [menuItem setHidden:TRUE];
-  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSMenuItem* menuItem = find_menu_item(menu, menuId);
+    if (menuItem != NULL) {
+      [menuItem setHidden:TRUE];
+    }
+  });
 }
 
 - (void) setMenuItemIcon:(NSArray*)imageAndMenuId {
-  NSImage* image = [imageAndMenuId objectAtIndex:0];
-  NSNumber* menuId = [imageAndMenuId objectAtIndex:1];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSImage* image = [imageAndMenuId objectAtIndex:0];
+    NSNumber* menuId = [imageAndMenuId objectAtIndex:1];
 
-  NSMenuItem* menuItem;
-  menuItem = find_menu_item(menu, menuId);
-  if (menuItem == NULL) {
-    return;
-  }
-  menuItem.image = image;
+    NSMenuItem* menuItem;
+    menuItem = find_menu_item(menu, menuId);
+    if (menuItem == NULL) {
+      return;
+    }
+    menuItem.image = image;
+  });
 }
 
 - (void) show_menu_item:(NSNumber*) menuId
 {
-  NSMenuItem* menuItem = find_menu_item(menu, menuId);
-  if (menuItem != NULL) {
-    [menuItem setHidden:FALSE];
-  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSMenuItem* menuItem = find_menu_item(menu, menuId);
+    if (menuItem != NULL) {
+      [menuItem setHidden:FALSE];
+    }
+  });
 }
 
 - (void) quit
 {
-  [NSApp terminate:self];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSApp terminate:self];
+  });
 }
 
 @end
 
 void registerSystray(void) {
-  SysTrayAppDelegate *delegate = [[SysTrayAppDelegate alloc] init];
-  [[NSApplication sharedApplication] setDelegate:delegate];
-  // A workaround to avoid crashing on macOS versions before Catalina. Somehow
-  // SIGSEGV would happen inside AppKit if [NSApp run] is called from a
-  // different function, even if that function is called right after this.
-  if (floor(NSAppKitVersionNumber) <= /*NSAppKitVersionNumber10_14*/ 1671){
-    [NSApp run];
-  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    SysTrayAppDelegate *delegate = [[SysTrayAppDelegate alloc] init];
+    [[NSApplication sharedApplication] setDelegate:delegate];
+    if (floor(NSAppKitVersionNumber) <= 1671){
+      [NSApp run];
+    }
+  });
 }
 
 int nativeLoop(void) {
-  if (floor(NSAppKitVersionNumber) > /*NSAppKitVersionNumber10_14*/ 1671){
-    [NSApp run];
-  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (floor(NSAppKitVersionNumber) > 1671){
+      [NSApp run];
+    }
+  });
   return EXIT_SUCCESS;
 }
 
-void runInMainThread(void(^block)(void)) {
-  dispatch_async(dispatch_get_main_queue(), block);
+void runInMainThread(SEL method, id object) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [(SysTrayAppDelegate*)[NSApp delegate]
+      performSelectorOnMainThread:method
+                       withObject:object
+                    waitUntilDone: YES];
+  });
 }
 
 void setIcon(const char* iconBytes, int length, bool template) {
-  NSData* buffer = [NSData dataWithBytes:iconBytes length:length];
-  NSImage *image = [[NSImage alloc] initWithData:buffer];
-  [image setSize:NSMakeSize(16, 16)];
-  image.template = template;
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] setIcon:image];
-  });
-}
-
-void setTitle(char* ctitle) {
-  NSString* title = [[NSString alloc] initWithCString:ctitle encoding:NSUTF8StringEncoding];
-  free(ctitle);
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] setTitle:title];
-  });
-}
-
-void setTooltip(char* ctooltip) {
-  NSString* tooltip = [[NSString alloc] initWithCString:ctooltip encoding:NSUTF8StringEncoding];
-  free(ctooltip);
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] setTooltip:tooltip];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
+    NSImage *image = [[NSImage alloc] initWithData:buffer];
+    [image setSize:NSMakeSize(16, 16)];
+    image.template = template;
+    runInMainThread(@selector(setIcon:), (id)image);
   });
 }
 
 void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool template) {
-  NSData* buffer = [NSData dataWithBytes:iconBytes length:length];
-  NSImage *image = [[NSImage alloc] initWithData:buffer];
-  [image setSize:NSMakeSize(16, 16)];
-  image.template = template;
-  NSNumber *mId = [NSNumber numberWithInt:menuId];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
+    NSImage *image = [[NSImage alloc] initWithData:buffer];
+    [image setSize:NSMakeSize(16, 16)];
+    image.template = template;
+    runInMainThread(@selector(setMenuItemIcon:), (id)@[image, @(menuId)]);
+  });
+}
 
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] setMenuItemIcon:@[image, (id)mId]];
+void updateTitle(const char* title) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    runInMainThread(@selector(setTitle:), (id)[NSString stringWithCString:title encoding:NSUTF8StringEncoding]);
+  });
+}
+
+void updateTooltip(const char* tooltip) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    runInMainThread(@selector(setTooltip:), (id)[NSString stringWithCString:tooltip encoding:NSUTF8StringEncoding]);
+  });
+}
+
+void showMenu(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    SysTrayAppDelegate *delegate = (SysTrayAppDelegate*)[NSApp delegate];
+    [delegate.window makeKeyAndOrderFront:nil];
+  });
+}
+
+void hideMenu(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    SysTrayAppDelegate *delegate = (SysTrayAppDelegate*)[NSApp delegate];
+    [delegate.window orderOut:nil];
   });
 }
 
 void setRemovalAllowed(bool allowed) {
-  NSNumber *allow = [NSNumber numberWithBool:(BOOL)allowed];
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] setRemovalAllowed:allow.boolValue];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setRemovalAllowed:allowed];
   });
 }
 
-void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* tooltip, short disabled, short checked, short isCheckable) {
-  MenuItem* item = [[MenuItem alloc] initWithId:menuId
-                              withParentMenuId:parentMenuId
-                                     withTitle:title
-                                   withTooltip:tooltip
-                                  withDisabled:disabled
-                                   withChecked:checked];
-  free(title);
-  free(tooltip);
-
-  runInMainThread(^{
+void addOrUpdateMenuItem(int menuId, int parentMenuId, const char* title, const char* tooltip, short disabled, short checked) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    MenuItem *item = [[MenuItem alloc] initWithId:menuId
+                                   withParentMenuId:parentMenuId
+                                          withTitle:title
+                                        withTooltip:tooltip
+                                       withDisabled:disabled
+                                        withChecked:checked];
     [(SysTrayAppDelegate*)[NSApp delegate] add_or_update_menu_item:item];
   });
 }
 
-void add_separator(int menuId) {
-  NSNumber *mId = [NSNumber numberWithInt:menuId];
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] add_separator:mId];
+void addSeparator(int menuId) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [(SysTrayAppDelegate*)[NSApp delegate] add_separator:@(menuId)];
   });
 }
 
-void hide_menu_item(int menuId) {
-  NSNumber *mId = [NSNumber numberWithInt:menuId];
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] hide_menu_item:mId];
+void hideMenuItem(int menuId) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [(SysTrayAppDelegate*)[NSApp delegate] hide_menu_item:@(menuId)];
   });
 }
 
-void show_menu_item(int menuId) {
-  NSNumber *mId = [NSNumber numberWithInt:menuId];
-
-  runInMainThread(^{
-    [(SysTrayAppDelegate*)[NSApp delegate] show_menu_item:mId];
+void showMenuItem(int menuId) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [(SysTrayAppDelegate*)[NSApp delegate] show_menu_item:@(menuId)];
   });
 }
 
-void quit() {
-  runInMainThread(^{
+void quit(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
     [(SysTrayAppDelegate*)[NSApp delegate] quit];
   });
 }
