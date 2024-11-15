@@ -50,13 +50,13 @@ withParentMenuId: (int)theParentMenuId
 }
 @end
 
-@interface AppDelegate: NSObject <NSApplicationDelegate>
+@interface SysTrayAppDelegate: NSObject <NSApplicationDelegate>
   - (void) add_or_update_menu_item:(MenuItem*) item;
   - (IBAction)menuHandler:(id)sender;
   @property (assign) IBOutlet NSWindow *window;
   @end
 
-  @implementation AppDelegate
+  @implementation SysTrayAppDelegate
 {
   NSStatusItem *statusItem;
   NSMenu *menu;
@@ -140,7 +140,7 @@ withParentMenuId: (int)theParentMenuId
       [parentItem setSubmenu:theMenu];
     }
   }
-  
+
   NSMenuItem *menuItem;
   menuItem = find_menu_item(theMenu, item->menuId);
   if (menuItem == NULL) {
@@ -226,7 +226,7 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
 @end
 
 void registerSystray(void) {
-  AppDelegate *delegate = [[AppDelegate alloc] init];
+  SysTrayAppDelegate *delegate = [[SysTrayAppDelegate alloc] init];
   [[NSApplication sharedApplication] setDelegate:delegate];
   // A workaround to avoid crashing on macOS versions before Catalina. Somehow
   // SIGSEGV would happen inside AppKit if [NSApp run] is called from a
@@ -243,72 +243,99 @@ int nativeLoop(void) {
   return EXIT_SUCCESS;
 }
 
-void runInMainThread(SEL method, id object) {
-  [(AppDelegate*)[NSApp delegate]
-    performSelectorOnMainThread:method
-                     withObject:object
-                  waitUntilDone: YES];
+void runInMainThread(void(^block)(void)) {
+  dispatch_async(dispatch_get_main_queue(), block);
 }
 
 void setIcon(const char* iconBytes, int length, bool template) {
-  NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
+  NSData* buffer = [NSData dataWithBytes:iconBytes length:length];
   NSImage *image = [[NSImage alloc] initWithData:buffer];
   [image setSize:NSMakeSize(16, 16)];
   image.template = template;
-  runInMainThread(@selector(setIcon:), (id)image);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setIcon:image];
+  });
+}
+
+void setTitle(char* ctitle) {
+  NSString* title = [[NSString alloc] initWithCString:ctitle encoding:NSUTF8StringEncoding];
+  free(ctitle);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setTitle:title];
+  });
+}
+
+void setTooltip(char* ctooltip) {
+  NSString* tooltip = [[NSString alloc] initWithCString:ctooltip encoding:NSUTF8StringEncoding];
+  free(ctooltip);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setTooltip:tooltip];
+  });
 }
 
 void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool template) {
-  NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
+  NSData* buffer = [NSData dataWithBytes:iconBytes length:length];
   NSImage *image = [[NSImage alloc] initWithData:buffer];
   [image setSize:NSMakeSize(16, 16)];
   image.template = template;
   NSNumber *mId = [NSNumber numberWithInt:menuId];
-  runInMainThread(@selector(setMenuItemIcon:), @[image, (id)mId]);
-}
 
-void setTitle(char* ctitle) {
-  NSString* title = [[NSString alloc] initWithCString:ctitle
-                                             encoding:NSUTF8StringEncoding];
-  free(ctitle);
-  runInMainThread(@selector(setTitle:), (id)title);
-}
-
-void setTooltip(char* ctooltip) {
-  NSString* tooltip = [[NSString alloc] initWithCString:ctooltip
-                                               encoding:NSUTF8StringEncoding];
-  free(ctooltip);
-  runInMainThread(@selector(setTooltip:), (id)tooltip);
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setMenuItemIcon:@[image, (id)mId]];
+  });
 }
 
 void setRemovalAllowed(bool allowed) {
-  // must use an object wrapper for the bool, to use with performSelectorOnMainThread:
   NSNumber *allow = [NSNumber numberWithBool:(BOOL)allowed];
-  runInMainThread(@selector(setRemovalAllowed:), (id)allow);
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] setRemovalAllowed:allow.boolValue];
+  });
 }
 
 void add_or_update_menu_item(int menuId, int parentMenuId, char* title, char* tooltip, short disabled, short checked, short isCheckable) {
-  MenuItem* item = [[MenuItem alloc] initWithId: menuId withParentMenuId: parentMenuId withTitle: title withTooltip: tooltip withDisabled: disabled withChecked: checked];
+  MenuItem* item = [[MenuItem alloc] initWithId:menuId
+                              withParentMenuId:parentMenuId
+                                     withTitle:title
+                                   withTooltip:tooltip
+                                  withDisabled:disabled
+                                   withChecked:checked];
   free(title);
   free(tooltip);
-  runInMainThread(@selector(add_or_update_menu_item:), (id)item);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] add_or_update_menu_item:item];
+  });
 }
 
 void add_separator(int menuId) {
   NSNumber *mId = [NSNumber numberWithInt:menuId];
-  runInMainThread(@selector(add_separator:), (id)mId);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] add_separator:mId];
+  });
 }
 
 void hide_menu_item(int menuId) {
   NSNumber *mId = [NSNumber numberWithInt:menuId];
-  runInMainThread(@selector(hide_menu_item:), (id)mId);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] hide_menu_item:mId];
+  });
 }
 
 void show_menu_item(int menuId) {
   NSNumber *mId = [NSNumber numberWithInt:menuId];
-  runInMainThread(@selector(show_menu_item:), (id)mId);
+
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] show_menu_item:mId];
+  });
 }
 
 void quit() {
-  runInMainThread(@selector(quit), nil);
+  runInMainThread(^{
+    [(SysTrayAppDelegate*)[NSApp delegate] quit];
+  });
 }
