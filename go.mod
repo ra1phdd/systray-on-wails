@@ -1,4 +1,4 @@
-module github.com/ra1phdd/wails-systray
+module github.com/ra1phdd/systray-on-wails
 
 go 1.13
 
